@@ -66,10 +66,10 @@ const defaultAgent = {
   approvalMode: 'Require approval for external actions',
 }
 
-function downloadAgentProfile(agent) {
-  const profile = {
+function buildProfile(agent, workflows = []) {
+  return {
     product: 'ProAgent Local',
-    version: '0.1.0',
+    version: '0.2.0',
     createdAt: new Date().toISOString(),
     agent: {
       name: agent.name,
@@ -97,17 +97,76 @@ function downloadAgentProfile(agent) {
         'Move money or change financial settings',
       ],
     },
+    starterWorkflows: workflows,
   }
+}
 
-  const blob = new Blob([JSON.stringify(profile, null, 2)], { type: 'application/json' })
+function downloadJson(filename, data) {
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
   const url = URL.createObjectURL(blob)
   const link = document.createElement('a')
   link.href = url
-  link.download = `${agent.name || 'proagent'}-profile.json`
+  link.download = filename
   document.body.appendChild(link)
   link.click()
   document.body.removeChild(link)
   URL.revokeObjectURL(url)
+}
+
+function generateStarterWorkflows(agent) {
+  const base = {
+    'Executive Assistant': [
+      ['Morning Command Brief', 'Review calendar, open tasks, and user notes; produce top priorities and risks for the day.'],
+      ['Inbox Triage Draft', 'Classify incoming messages by urgency and draft recommended responses without sending.'],
+      ['Decision Support Memo', 'Turn messy notes into a short decision memo with options, tradeoffs, and recommended action.'],
+      ['Meeting Prep Pack', 'Create agenda, talking points, and follow-up questions for upcoming meetings.'],
+      ['End-of-Day Closeout', 'Summarize completed work, unresolved issues, and tomorrow’s first three actions.'],
+    ],
+    'Job Search Agent': [
+      ['Role Match Scan', 'Compare target jobs against user criteria for salary, remote status, seniority, and domain fit.'],
+      ['Resume Alignment Draft', 'Create tailored resume bullets based on the role description and user experience.'],
+      ['Recruiter Outreach Draft', 'Prepare direct, human-sounding recruiter messages for high-fit roles.'],
+      ['Application Tracker Update', 'Log role, company, fit score, status, next action, and due date.'],
+      ['Interview Prep Brief', 'Generate likely questions, STAR answers, and company-specific positioning points.'],
+    ],
+    'Crypto Research Agent': [
+      ['Market Signal Brief', 'Summarize price direction, volatility, ETF/institutional signals, and major news drivers.'],
+      ['Risk Flag Review', 'Identify downside risks, overexposure, liquidity concerns, and sentiment extremes.'],
+      ['Buy/Sell Watchlist', 'Create watch conditions without executing trades or moving funds.'],
+      ['Thesis Tracker', 'Compare new events against the user’s long-term Bitcoin or crypto thesis.'],
+      ['Weekly Portfolio Memo', 'Draft a plain-English view of holdings, risks, and next research questions.'],
+    ],
+    'Risk & Compliance Analyst': [
+      ['Control Quality Review', 'Review control language for objective, activity, evidence, frequency, and action taken quality.'],
+      ['Issue Description Draft', 'Convert raw observations into clear issue statements with risk, impact, and corrective action.'],
+      ['Regulatory Mapping Pass', 'Map user-provided obligations to risks, controls, gaps, and evidence needs.'],
+      ['RCSA Challenge Brief', 'Prepare credible second-line challenge questions and expected evidence.'],
+      ['Executive Risk Summary', 'Draft a concise senior-leader brief with risk posture, themes, decisions, and next steps.'],
+    ],
+    'Household Operations Agent': [
+      ['Weekly Home Plan', 'Create a household task plan covering appointments, errands, repairs, and family needs.'],
+      ['Document Organizer', 'Summarize household documents and propose folder names and retention actions.'],
+      ['Maintenance Reminder', 'Track recurring household maintenance and produce upcoming reminders.'],
+      ['Family Logistics Brief', 'Prepare daily or weekly plans for schedules, meals, activities, and errands.'],
+      ['Budget Watch Draft', 'Organize bills and spending notes without initiating payments.'],
+    ],
+    'Custom Persona': [
+      ['Mission Intake', 'Clarify the custom persona’s purpose, success criteria, limits, and daily operating rhythm.'],
+      ['Priority Scan', 'Review available inputs and generate the top five recommended next actions.'],
+      ['Drafting Routine', 'Prepare drafts, checklists, summaries, or reports aligned to the assigned persona.'],
+      ['Risk and Boundary Check', 'Identify actions that require approval before the agent proceeds.'],
+      ['Daily Closeout', 'Summarize what was done, what remains open, and what needs human decision.'],
+    ],
+  }
+
+  return (base[agent.persona] || base['Custom Persona']).map(([title, description], index) => ({
+    id: index + 1,
+    title,
+    description,
+    cadence: index === 0 ? 'Daily' : index === 4 ? 'End of day / weekly' : 'As needed',
+    permission: index <= 2 ? 'Allowed in trusted zone' : 'Human approval before external action',
+    missionFit: agent.mission,
+  }))
 }
 
 function FeatureCard({ icon: Icon, title, text }) {
@@ -141,7 +200,7 @@ function AutonomyBadge({ level }) {
   )
 }
 
-function AgentPreview({ agent }) {
+function AgentPreview({ agent, workflows, onExport }) {
   return (
     <div className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-xl shadow-slate-200/70">
       <div className="flex items-start justify-between gap-4">
@@ -187,8 +246,26 @@ function AgentPreview({ agent }) {
         </div>
       </div>
 
+      {workflows.length > 0 && (
+        <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+          <p className="text-xs font-bold uppercase tracking-wide text-slate-500">Starter Workflows</p>
+          <div className="mt-3 grid gap-3">
+            {workflows.map((workflow) => (
+              <div key={workflow.id} className="rounded-2xl bg-white p-4 shadow-sm">
+                <p className="text-sm font-black text-slate-950">{workflow.id}. {workflow.title}</p>
+                <p className="mt-1 text-sm leading-6 text-slate-600">{workflow.description}</p>
+                <div className="mt-3 flex flex-wrap gap-2 text-xs font-bold">
+                  <span className="rounded-full bg-slate-100 px-3 py-1 text-slate-700">{workflow.cadence}</span>
+                  <span className="rounded-full bg-emerald-50 px-3 py-1 text-emerald-700">{workflow.permission}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       <button
-        onClick={() => downloadAgentProfile(agent)}
+        onClick={onExport}
         className="mt-6 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-slate-950 px-5 py-4 text-sm font-bold text-white hover:bg-slate-800"
       >
         <Download className="h-4 w-4" /> Export Agent Profile JSON
@@ -199,6 +276,7 @@ function AgentPreview({ agent }) {
 
 export default function App() {
   const [agent, setAgent] = useState(defaultAgent)
+  const [workflows, setWorkflows] = useState([])
 
   const activeCapabilities = useMemo(
     () => [
@@ -209,6 +287,16 @@ export default function App() {
     ],
     [],
   )
+
+  const handleGenerate = () => {
+    setWorkflows(generateStarterWorkflows(agent))
+  }
+
+  const handleExport = () => {
+    const generated = workflows.length > 0 ? workflows : generateStarterWorkflows(agent)
+    downloadJson(`${agent.name || 'proagent'}-profile.json`, buildProfile(agent, generated))
+    if (workflows.length === 0) setWorkflows(generated)
+  }
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-950">
@@ -245,7 +333,7 @@ export default function App() {
               Build a proactive AI agent that works like the persona you assign.
             </h1>
             <p className="mt-6 max-w-2xl text-lg leading-8 text-slate-600">
-              ProAgent Local is a downloadable desktop-app concept that lets users create persona-based agents, define missions, connect local knowledge, set autonomy boundaries, and run useful workflows without needing to code.
+              ProAgent Local is a downloadable desktop-app concept that lets users create persona-based agents, define missions, connect local knowledge, set autonomy boundaries, and generate starter workflows without needing to code.
             </p>
             <div className="mt-8 flex flex-col gap-3 sm:flex-row">
               <a href="#builder" className="inline-flex items-center justify-center gap-2 rounded-2xl bg-slate-950 px-6 py-4 text-sm font-bold text-white shadow-lg shadow-slate-300 hover:bg-slate-800">
@@ -286,7 +374,7 @@ export default function App() {
               <p className="text-sm font-bold uppercase tracking-wide text-slate-500">Interactive product demo</p>
               <h2 className="mt-2 text-4xl font-black tracking-tight text-slate-950">Agent Builder Interface</h2>
               <p className="mt-4 text-base leading-7 text-slate-600">
-                The installed app should guide non-technical users through persona, mission, local memory, autonomy, and action permissions.
+                The installed app should guide non-technical users through persona, mission, local memory, autonomy, action permissions, and workflow generation.
               </p>
             </div>
 
@@ -307,7 +395,10 @@ export default function App() {
                     <select
                       className="rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm outline-none focus:border-slate-900"
                       value={agent.persona}
-                      onChange={(e) => setAgent({ ...agent, persona: e.target.value })}
+                      onChange={(e) => {
+                        setAgent({ ...agent, persona: e.target.value })
+                        setWorkflows([])
+                      }}
                     >
                       {personas.map((persona) => (
                         <option key={persona}>{persona}</option>
@@ -321,7 +412,10 @@ export default function App() {
                       rows={5}
                       className="rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm leading-6 outline-none focus:border-slate-900"
                       value={agent.mission}
-                      onChange={(e) => setAgent({ ...agent, mission: e.target.value })}
+                      onChange={(e) => {
+                        setAgent({ ...agent, mission: e.target.value })
+                        setWorkflows([])
+                      }}
                     />
                   </label>
 
@@ -362,16 +456,24 @@ export default function App() {
                     </label>
                   </div>
 
-                  <button
-                    onClick={() => downloadAgentProfile(agent)}
-                    className="inline-flex items-center justify-center gap-2 rounded-2xl bg-slate-950 px-5 py-4 text-sm font-bold text-white hover:bg-slate-800"
-                  >
-                    <PlayCircle className="h-4 w-4" /> Generate Agent Profile
-                  </button>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <button
+                      onClick={handleGenerate}
+                      className="inline-flex items-center justify-center gap-2 rounded-2xl bg-slate-950 px-5 py-4 text-sm font-bold text-white hover:bg-slate-800"
+                    >
+                      <PlayCircle className="h-4 w-4" /> Generate Starter Workflows
+                    </button>
+                    <button
+                      onClick={handleExport}
+                      className="inline-flex items-center justify-center gap-2 rounded-2xl border border-slate-300 bg-white px-5 py-4 text-sm font-bold text-slate-950 hover:bg-slate-100"
+                    >
+                      <Download className="h-4 w-4" /> Export JSON
+                    </button>
+                  </div>
                 </div>
               </div>
 
-              <AgentPreview agent={agent} />
+              <AgentPreview agent={agent} workflows={workflows} onExport={handleExport} />
             </div>
           </div>
         </section>
