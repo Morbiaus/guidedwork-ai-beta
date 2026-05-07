@@ -1,6 +1,6 @@
 {
-  "buildCommand": "cd proagent-local && npm install && npm run build",
-  "outputDirectory": "proagent-local/dist",
   "installCommand": "npm install --prefix proagent-local",
+  "buildCommand": "npm run build --prefix proagent-local",
+  "outputDirectory": "proagent-local/dist",
   "framework": "vite"
 }
