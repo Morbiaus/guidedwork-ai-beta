@@ -178,15 +178,19 @@ export default function App() {
     setChatPending(true)
 
     try {
+      const controller = new AbortController()
+      const timeout = setTimeout(() => controller.abort(), 8000)
       const response = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        signal: controller.signal,
         body: JSON.stringify({
           instructions: prompt,
           messages: nextMessages,
           agent: { type: agent.type, name: helperName || agent.name, personality: personality.label },
         }),
       })
+      clearTimeout(timeout)
       const data = await response.json()
       if (!response.ok) throw new Error(data?.error || 'Chat failed')
       const assistantMessage = { role: 'assistant', content: data.reply || makeAgentReply(agent, helperName || agent.name, personality, content) }
@@ -292,7 +296,7 @@ export default function App() {
             </div>
             <div className="flex flex-wrap gap-3">{TEST_TASKS.map((task) => <button key={task} onClick={() => { setAgentInput(task); setTestTask(task); setAgentReply(''); setActivated(false) }} className="rounded-2xl border border-slate-300 bg-white px-4 py-3 text-left text-sm font-bold hover:bg-slate-50">{task}</button>)}</div>
             <label><span className="mb-2 block text-sm font-black text-slate-700">Message your AI Agent</span><textarea rows={4} value={agentInput} onChange={(e) => setAgentInput(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) runAgent() }} className="w-full rounded-3xl border border-slate-300 bg-white px-5 py-4 text-base font-bold leading-7 outline-none focus:border-slate-950" /></label>
-            <SmallButton primary onClick={runAgent} disabled={chatPending || !agentInput.trim()}><Send className="h-4 w-4" /> {activated ? `Send to ${helperName || agent.name}` : `Send and Activate ${helperName || agent.name}`}</SmallButton>
+            <SmallButton primary onClick={runAgent} disabled={chatPending || !agentInput.trim()}><Send className="h-4 w-4" /> {activated ? `Send Message to ${helperName || agent.name}` : `Activate and Get First Answer`}</SmallButton>
             {activated && <div className="rounded-3xl border border-emerald-200 bg-emerald-50 p-5 text-emerald-950"><p className="flex items-center gap-2 text-xl font-black"><CheckCircle2 className="h-6 w-6" /> Activated — your AI Agent works</p><p className="mt-2 text-sm leading-6">Keep chatting above. The conversation stays here on this device.</p></div>}
           </div>
           <details className="mt-5 rounded-3xl border border-slate-200 bg-slate-50 p-5">

@@ -43,8 +43,11 @@ export default async function handler(req, res) {
       ...messages.slice(-12).map((m) => ({ role: m.role === 'assistant' ? 'assistant' : 'user', content: String(m.content || '').slice(0, 4000) })),
     ]
 
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), 7000)
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
+      signal: controller.signal,
       headers: {
         Authorization: `Bearer ${apiKey}`,
         'Content-Type': 'application/json',
@@ -56,6 +59,7 @@ export default async function handler(req, res) {
         max_tokens: 600,
       }),
     })
+    clearTimeout(timeout)
 
     if (!response.ok) {
       return res.status(200).json({ reply: fallbackReply(agent, lastUser, messages), mode: 'fallback' })
