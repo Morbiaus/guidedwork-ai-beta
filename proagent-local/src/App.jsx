@@ -111,6 +111,8 @@ export default function App() {
   const [activated, setActivated] = useState(false)
   const [agentInput, setAgentInput] = useState(TEST_TASKS[0])
   const [agentReply, setAgentReply] = useState('')
+  const [chatMessages, setChatMessages] = useState([])
+  const [chatPending, setChatPending] = useState(false)
 
   useEffect(() => {
     try {
@@ -125,13 +127,14 @@ export default function App() {
         setAgentInput(saved.agentInput || saved.testTask || TEST_TASKS[0])
         setAgentReply(saved.agentReply || '')
         setActivated(Boolean(saved.activated))
+        setChatMessages(saved.chatMessages || [])
       }
     } catch {}
   }, [])
 
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ step, agentType, personalityLabel, helperName, built, testTask, agentInput, agentReply, activated }))
-  }, [step, agentType, personalityLabel, helperName, built, testTask, agentInput, agentReply, activated])
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ step, agentType, personalityLabel, helperName, built, testTask, agentInput, agentReply, activated, chatMessages }))
+  }, [step, agentType, personalityLabel, helperName, built, testTask, agentInput, agentReply, activated, chatMessages])
 
   const agent = useMemo(() => AGENTS.find((a) => a.type === agentType) || AGENTS[0], [agentType])
   const personality = useMemo(() => PERSONALITIES.find((p) => p.label === personalityLabel) || PERSONALITIES[0], [personalityLabel])
@@ -139,10 +142,12 @@ export default function App() {
   const prompt = useMemo(() => makePrompt(agent, helperName || agent.name, personality, workflows), [agent, helperName, personality, workflows])
 
   const buildAgent = () => {
+    const name = helperName || agent.name
     setBuilt(true)
     setAgentInput(TEST_TASKS[0])
     setActivated(false)
     setAgentReply('')
+    setChatMessages([{ role: 'assistant', content: `Hi, I’m ${name}. I’m ready. Ask me for help, or tap one of the starter tasks below.` }])
     setStep(5)
   }
 
@@ -158,13 +163,43 @@ export default function App() {
     setAgentInput(TEST_TASKS[0])
     setAgentReply('')
     setActivated(false)
+    setChatMessages([])
+    setChatPending(false)
   }
 
-  const runAgent = () => {
-    setTestTask(agentInput)
-    setAgentReply(makeAgentReply(agent, helperName || agent.name, personality, agentInput))
-    setActivated(true)
+  const runAgent = async () => {
+    const content = agentInput.trim()
+    if (!content || chatPending) return
+    const userMessage = { role: 'user', content }
+    const priorMessages = chatMessages.length ? chatMessages : [{ role: 'assistant', content: `Hi, I’m ${helperName || agent.name}. I’m ready to help.` }]
+    const nextMessages = [...priorMessages, userMessage]
+    setChatMessages(nextMessages)
+    setAgentInput('')
+    setChatPending(true)
+
+    try {
+      const response = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          instructions: prompt,
+          messages: nextMessages,
+          agent: { type: agent.type, name: helperName || agent.name, personality: personality.label },
+        }),
+      })
+      const data = await response.json()
+      if (!response.ok) throw new Error(data?.error || 'Chat failed')
+      const assistantMessage = { role: 'assistant', content: data.reply || makeAgentReply(agent, helperName || agent.name, personality, content) }
+      setChatMessages([...nextMessages, assistantMessage])
+    } catch {
+      const assistantMessage = { role: 'assistant', content: makeAgentReply(agent, helperName || agent.name, personality, content) }
+      setChatMessages([...nextMessages, assistantMessage])
+    } finally {
+      setActivated(true)
+      setChatPending(false)
+    }
   }
+
 
   const copyPrompt = async () => {
     await navigator.clipboard.writeText(prompt)
@@ -178,7 +213,8 @@ export default function App() {
       personality: personality.label,
       testTask,
       instructions: prompt,
-      note: 'This backup is optional. The simple user flow is complete when the helper gives a useful answer.',
+      chatMessages,
+      note: 'This backup is optional. The simple user flow is complete when the helper answers and the user can keep chatting.',
     })
   }
 
@@ -241,15 +277,23 @@ export default function App() {
 
         {step === 5 && <div>
           <p className="text-sm font-black uppercase tracking-wide text-emerald-600">Step 5 of 5</p>
-          <h2 className="mt-2 text-3xl font-black">Activate your AI Agent</h2>
-          <p className="mt-3 text-slate-600">One final check: ask it to do a real task. When it answers, your agent is active.</p>
+          <h2 className="mt-2 text-3xl font-black">Chat with your AI Agent</h2>
+          <p className="mt-3 text-slate-600">Your agent is built. Send a message to activate it, then keep chatting.</p>
           <div className="mt-6 grid gap-4">
-            <div className="rounded-3xl border border-emerald-200 bg-emerald-50 p-5 text-emerald-950"><p className="flex items-center gap-2 text-xl font-black"><CheckCircle2 className="h-6 w-6" /> {helperName || agent.name} has been built</p><p className="mt-2 text-sm leading-6">Now click <b>Activate and Test</b>. A successful answer means the agent works.</p></div>
-            <label><span className="mb-2 block text-sm font-black text-slate-700">Ask your AI Agent</span><textarea rows={4} value={agentInput} onChange={(e) => setAgentInput(e.target.value)} className="w-full rounded-3xl border border-slate-300 bg-white px-5 py-4 text-base font-bold leading-7 outline-none focus:border-slate-950" /></label>
-            <div className="flex flex-wrap gap-3">{TEST_TASKS.map((task) => <button key={task} onClick={() => { setAgentInput(task); setAgentInput(task); setTestTask(task); setAgentReply(''); setActivated(false) }} className="rounded-2xl border border-slate-300 bg-white px-4 py-3 text-left text-sm font-bold hover:bg-slate-50">{task}</button>)}</div>
-            <SmallButton primary onClick={runAgent}><Send className="h-4 w-4" /> Activate and Test {helperName || agent.name}</SmallButton>
-            {agentReply && <div className="rounded-3xl bg-slate-950 p-5 text-white"><p className="text-sm font-black uppercase tracking-wide text-slate-400">Agent answer</p><pre className="mt-3 whitespace-pre-wrap text-sm leading-7">{agentReply}</pre></div>}
-            {activated && <div className="rounded-3xl border border-emerald-200 bg-emerald-50 p-5 text-emerald-950"><p className="flex items-center gap-2 text-xl font-black"><CheckCircle2 className="h-6 w-6" /> Activated — your AI Agent works</p><p className="mt-2 text-sm leading-6">You asked a task and received a useful answer. This is the finish line.</p></div>}
+            <div className="rounded-3xl border border-emerald-200 bg-emerald-50 p-5 text-emerald-950"><p className="flex items-center gap-2 text-xl font-black"><CheckCircle2 className="h-6 w-6" /> {helperName || agent.name} has been built</p><p className="mt-2 text-sm leading-6">Type a message below. Once the agent answers, it is active and you can continue the conversation.</p></div>
+            <div className="max-h-[26rem] overflow-auto rounded-3xl border border-slate-200 bg-slate-50 p-4">
+              <div className="grid gap-3">
+                {chatMessages.map((message, index) => <div key={`${message.role}-${index}`} className={`rounded-3xl px-5 py-4 text-sm leading-7 ${message.role === 'user' ? 'ml-8 bg-slate-950 text-white' : 'mr-8 bg-white text-slate-800 shadow-sm'}`}>
+                  <p className="mb-1 text-xs font-black uppercase tracking-wide opacity-60">{message.role === 'user' ? 'You' : helperName || agent.name}</p>
+                  <p className="whitespace-pre-wrap">{message.content}</p>
+                </div>)}
+                {chatPending && <div className="mr-8 rounded-3xl bg-white px-5 py-4 text-sm font-bold text-slate-500 shadow-sm">{helperName || agent.name} is thinking…</div>}
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-3">{TEST_TASKS.map((task) => <button key={task} onClick={() => { setAgentInput(task); setTestTask(task); setAgentReply(''); setActivated(false) }} className="rounded-2xl border border-slate-300 bg-white px-4 py-3 text-left text-sm font-bold hover:bg-slate-50">{task}</button>)}</div>
+            <label><span className="mb-2 block text-sm font-black text-slate-700">Message your AI Agent</span><textarea rows={4} value={agentInput} onChange={(e) => setAgentInput(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) runAgent() }} className="w-full rounded-3xl border border-slate-300 bg-white px-5 py-4 text-base font-bold leading-7 outline-none focus:border-slate-950" /></label>
+            <SmallButton primary onClick={runAgent} disabled={chatPending || !agentInput.trim()}><Send className="h-4 w-4" /> {activated ? `Send to ${helperName || agent.name}` : `Send and Activate ${helperName || agent.name}`}</SmallButton>
+            {activated && <div className="rounded-3xl border border-emerald-200 bg-emerald-50 p-5 text-emerald-950"><p className="flex items-center gap-2 text-xl font-black"><CheckCircle2 className="h-6 w-6" /> Activated — your AI Agent works</p><p className="mt-2 text-sm leading-6">Keep chatting above. The conversation stays here on this device.</p></div>}
           </div>
           <details className="mt-5 rounded-3xl border border-slate-200 bg-slate-50 p-5">
             <summary className="cursor-pointer font-black">Optional advanced setup</summary>
