@@ -5,6 +5,14 @@ const STORAGE_KEY = 'guidedwork-simple-wizard-v1'
 
 const AGENTS = [
   {
+    type: 'Weather & News Helper',
+    name: 'Beacon',
+    plain: 'Tell me the weather and simple news updates.',
+    mission: 'Give simple weather updates, top news headlines, and plain next steps for the day.',
+    tasks: 'Weather checks, simple forecasts, top news headlines, and easy daily briefings.',
+    icon: '🌤️',
+  },
+  {
     type: 'Daily Helper',
     name: 'Sunny',
     plain: 'Help me remember things and make simple plans.',
@@ -59,8 +67,33 @@ const TEST_TASKS = [
   'Help me make a list of questions for an appointment.',
 ]
 
+const TEST_TASKS_BY_AGENT = {
+  'Weather & News Helper': [
+    "Tell me the weather in Miami and today's top news.",
+    "What is today's top news?",
+    "Tell me the weather in New York.",
+  ],
+  'Daily Helper': TEST_TASKS,
+  'Message Helper': [
+    'Help me write a kind message saying I need to reschedule.',
+    'Make that message shorter.',
+    'Make it warmer.',
+  ],
+  'Appointment Helper': [
+    'Help me make a list of questions for an appointment.',
+    'What should I bring to a doctor appointment?',
+    'Help me remember what to ask.',
+  ],
+  'Document Helper': [
+    'Help me understand a document.',
+    'Tell me what details I should look for in a letter.',
+    'Make a checklist for reviewing a form.',
+  ],
+}
+
 function workflowsFor(agentType) {
   const map = {
+    'Weather & News Helper': ['Weather Check', 'Top News', 'Morning Briefing'],
     'Daily Helper': ['Tomorrow Plan', 'Reminder List', 'Family Task List'],
     'Message Helper': ['Friendly Message Draft', 'Follow-Up Note', 'Appointment Message'],
     'Appointment Helper': ['Appointment Prep', 'Questions to Ask', 'After-Visit Follow-Up'],
@@ -91,6 +124,9 @@ function downloadJson(filename, data) {
 
 function makeAgentReply(agent, helperName, personality, task) {
   const cleanTask = task?.trim() || 'Help me make a simple plan for tomorrow.'
+  if (agent.type === 'Weather & News Helper') {
+    return `${helperName} says:\n\nI can help with weather and news. Try this exact message:\n\n“Tell me the weather in Miami and today's top news.”\n\nIf you want weather, include your city. If you want news, ask for today’s top news.\n\nTask I handled: ${cleanTask}`
+  }
   if (agent.type === 'Message Helper') {
     return `${helperName} says:\n\nHere is a simple message you can use:\n\n“Hi, I’m sorry, but I need to reschedule. Please let me know what other times work for you. Thank you.”\n\nBefore you send it, I can also make it warmer, shorter, or more formal.\n\nTask I handled: ${cleanTask}`
   }
@@ -151,10 +187,11 @@ export default function App() {
   const workflows = useMemo(() => workflowsFor(agent.type), [agent.type])
   const prompt = useMemo(() => makePrompt(agent, helperName || agent.name, personality, workflows), [agent, helperName, personality, workflows])
   const selectedBrain = useMemo(() => AI_BRAINS.find((brain) => brain.id === aiBrain) || AI_BRAINS[0], [aiBrain])
+  const starterTasks = useMemo(() => TEST_TASKS_BY_AGENT[agent.type] || TEST_TASKS, [agent.type])
 
   const buildAgent = () => {
     setBuilt(true)
-    setAgentInput(TEST_TASKS[0])
+    setAgentInput(starterTasks[0])
     setActivated(false)
     setAgentReply('')
     setChatMessages([])
@@ -168,9 +205,9 @@ export default function App() {
     setPersonalityLabel(PERSONALITIES[0].label)
     setHelperName(AGENTS[0].name)
     setBuilt(false)
-    setTestTask(TEST_TASKS[0])
+    setTestTask(starterTasks[0])
     setCopied(false)
-    setAgentInput(TEST_TASKS[0])
+    setAgentInput(starterTasks[0])
     setAgentReply('')
     setActivated(false)
     setAiBrain('guidedwork')
@@ -183,7 +220,7 @@ export default function App() {
     const name = helperName || agent.name
     setAiBrain(brain.id)
     setActivated(false)
-    setAgentInput(TEST_TASKS[0])
+    setAgentInput(starterTasks[0])
     setChatMessages([{ role: 'assistant', content: `Hi, I’m ${name}. I’m connected to ${brain.name}. Ask me for help, or tap one of the starter tasks below.` }])
     setStep(6)
   }
@@ -255,7 +292,7 @@ export default function App() {
       <section key={step} className="rounded-[2rem] bg-white p-6 shadow-sm sm:p-8">
         {step === 1 && <div>
           <p className="text-sm font-black uppercase tracking-wide text-slate-500">Step 1 of 6</p>
-          <h2 className="mt-2 text-3xl font-black">What should your AI Agent help with?</h2>
+          <h2 className="mt-2 text-3xl font-black">What do you want your AI Agent to help with?</h2>
           <p className="mt-3 text-slate-600">Select one. You can change it later.</p>
           <div className="mt-6 grid gap-3 sm:grid-cols-2">
             {AGENTS.map((a) => <button key={a.type} onClick={() => { setAgentType(a.type); setHelperName(a.name) }} className={`rounded-3xl border p-5 text-left transition ${agentType === a.type ? 'border-slate-950 bg-slate-950 text-white' : 'border-slate-200 bg-white hover:bg-slate-50'}`}>
@@ -322,7 +359,7 @@ export default function App() {
           </div>
           <div className="mt-6 rounded-3xl border border-blue-200 bg-blue-50 p-5 text-sm leading-6 text-blue-950">
             <p className="flex items-center gap-2 text-lg font-black"><Link2 className="h-5 w-5" /> Step 5B: GuidedWork connects it</p>
-            <p className="mt-2">When you press the button below, GuidedWork ties <b>{helperName || agent.name}</b> to <b>{selectedBrain.name}</b> behind the scenes. In the full business version, this button can open a safe login/consent screen when the provider allows it. If not, GuidedWork uses your plan or concierge setup so Grandma never handles API keys.</p>
+            <p className="mt-2">When you press the button below, GuidedWork connects <b>{helperName || agent.name}</b> to <b>{selectedBrain.name}</b>. If a sign-in is needed, GuidedWork will show one simple sign-in screen. If setup is not available, GuidedWork will handle it for you.</p>
           </div>
           <div className="mt-6 flex justify-between gap-3"><SmallButton onClick={() => setStep(4)}><ArrowLeft className="h-4 w-4" /> Back</SmallButton><SmallButton primary onClick={() => activateBrain(aiBrain)}><Link2 className="h-4 w-4" /> Connect {selectedBrain.name}</SmallButton></div>
         </div>}
@@ -355,7 +392,7 @@ export default function App() {
               </div>
               <div className="rounded-3xl border-2 border-dashed border-slate-300 bg-white p-4">
                 <p className="mb-3 flex items-center gap-2 text-sm font-black text-slate-700"><MousePointerClick className="h-4 w-4" /> Test message box</p>
-                <div className="flex flex-wrap gap-3">{TEST_TASKS.map((task) => <button key={task} onClick={() => { setAgentInput(task); setTestTask(task); setAgentReply('') }} className="rounded-2xl border border-slate-300 bg-white px-4 py-3 text-left text-sm font-bold hover:bg-slate-50">Use sample: {task}</button>)}</div>
+                <div className="flex flex-wrap gap-3">{starterTasks.map((task) => <button key={task} onClick={() => { setAgentInput(task); setTestTask(task); setAgentReply('') }} className="rounded-2xl border border-slate-300 bg-white px-4 py-3 text-left text-sm font-bold hover:bg-slate-50">Use sample: {task}</button>)}</div>
                 <label className="mt-4 block"><span className="mb-2 block text-sm font-black text-slate-700">Message your AI Agent</span><textarea rows={4} value={agentInput} onChange={(e) => setAgentInput(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) runAgent() }} className="w-full rounded-3xl border border-slate-300 bg-white px-5 py-4 text-base font-bold leading-7 outline-none focus:border-slate-950" /></label>
                 <div className="mt-4"><SmallButton primary onClick={runAgent} disabled={chatPending || !agentInput.trim()}><Send className="h-4 w-4" /> {activated ? `Send Another Message to ${helperName || agent.name}` : `Send Test Message`}</SmallButton></div>
               </div>
