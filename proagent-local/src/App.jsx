@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react'
-import { ArrowLeft, ArrowRight, BrainCircuit, CheckCircle2, Copy, Download, RotateCcw, Wand2 } from 'lucide-react'
+import { ArrowLeft, ArrowRight, BrainCircuit, CheckCircle2, Copy, Download, RotateCcw, Send, Wand2 } from 'lucide-react'
 
 const STORAGE_KEY = 'guidedwork-simple-wizard-v1'
 
@@ -43,18 +43,6 @@ const PERSONALITIES = [
   { label: 'Short and simple', tone: 'Short, simple, clear, and easy to follow.' },
   { label: 'Friendly and encouraging', tone: 'Friendly, encouraging, practical, and reassuring.' },
   { label: 'Direct and practical', tone: 'Direct, practical, organized, and action-oriented.' },
-]
-
-const HOW_TO = [
-  'Pick what you need help with.',
-  'Choose how your helper should sound.',
-  'Choose a name.',
-  'Click Build My AI Agent.',
-  'Try one simple task.',
-  'See a useful answer.',
-  'Copy the setup if you want to use it elsewhere.',
-  'Ask for setup help if you get stuck.',
-  'Confirm: my helper works.',
 ]
 
 const TEST_TASKS = [
@@ -120,6 +108,7 @@ export default function App() {
   const [built, setBuilt] = useState(false)
   const [testTask, setTestTask] = useState(TEST_TASKS[0])
   const [copied, setCopied] = useState(false)
+  const [activated, setActivated] = useState(false)
   const [agentInput, setAgentInput] = useState(TEST_TASKS[0])
   const [agentReply, setAgentReply] = useState('')
 
@@ -135,13 +124,14 @@ export default function App() {
         setTestTask(saved.testTask || TEST_TASKS[0])
         setAgentInput(saved.agentInput || saved.testTask || TEST_TASKS[0])
         setAgentReply(saved.agentReply || '')
+        setActivated(Boolean(saved.activated))
       }
     } catch {}
   }, [])
 
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ step, agentType, personalityLabel, helperName, built, testTask, agentInput, agentReply }))
-  }, [step, agentType, personalityLabel, helperName, built, testTask, agentInput, agentReply])
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ step, agentType, personalityLabel, helperName, built, testTask, agentInput, agentReply, activated }))
+  }, [step, agentType, personalityLabel, helperName, built, testTask, agentInput, agentReply, activated])
 
   const agent = useMemo(() => AGENTS.find((a) => a.type === agentType) || AGENTS[0], [agentType])
   const personality = useMemo(() => PERSONALITIES.find((p) => p.label === personalityLabel) || PERSONALITIES[0], [personalityLabel])
@@ -151,7 +141,8 @@ export default function App() {
   const buildAgent = () => {
     setBuilt(true)
     setAgentInput(TEST_TASKS[0])
-    setAgentReply(makeAgentReply(agent, helperName || agent.name, personality, TEST_TASKS[0]))
+    setActivated(false)
+    setAgentReply('')
     setStep(5)
   }
 
@@ -166,11 +157,13 @@ export default function App() {
     setCopied(false)
     setAgentInput(TEST_TASKS[0])
     setAgentReply('')
+    setActivated(false)
   }
 
   const runAgent = () => {
     setTestTask(agentInput)
     setAgentReply(makeAgentReply(agent, helperName || agent.name, personality, agentInput))
+    setActivated(true)
   }
 
   const copyPrompt = async () => {
@@ -248,14 +241,15 @@ export default function App() {
 
         {step === 5 && <div>
           <p className="text-sm font-black uppercase tracking-wide text-emerald-600">Step 5 of 5</p>
-          <h2 className="mt-2 text-3xl font-black">Your AI Agent is working</h2>
-          <p className="mt-3 text-slate-600">Ask it for help. It will answer right here.</p>
+          <h2 className="mt-2 text-3xl font-black">Activate your AI Agent</h2>
+          <p className="mt-3 text-slate-600">One final check: ask it to do a real task. When it answers, your agent is active.</p>
           <div className="mt-6 grid gap-4">
-            <div className="rounded-3xl border border-emerald-200 bg-emerald-50 p-5 text-emerald-950"><p className="flex items-center gap-2 text-xl font-black"><CheckCircle2 className="h-6 w-6" /> {helperName || agent.name} is ready</p><p className="mt-2 text-sm leading-6">The setup is complete. The agent can now take a task and return a useful answer.</p></div>
+            <div className="rounded-3xl border border-emerald-200 bg-emerald-50 p-5 text-emerald-950"><p className="flex items-center gap-2 text-xl font-black"><CheckCircle2 className="h-6 w-6" /> {helperName || agent.name} has been built</p><p className="mt-2 text-sm leading-6">Now click <b>Activate and Test</b>. A successful answer means the agent works.</p></div>
             <label><span className="mb-2 block text-sm font-black text-slate-700">Ask your AI Agent</span><textarea rows={4} value={agentInput} onChange={(e) => setAgentInput(e.target.value)} className="w-full rounded-3xl border border-slate-300 bg-white px-5 py-4 text-base font-bold leading-7 outline-none focus:border-slate-950" /></label>
-            <div className="flex flex-wrap gap-3">{TEST_TASKS.map((task) => <button key={task} onClick={() => { setAgentInput(task); setAgentReply(makeAgentReply(agent, helperName || agent.name, personality, task)); setTestTask(task) }} className="rounded-2xl border border-slate-300 bg-white px-4 py-3 text-left text-sm font-bold hover:bg-slate-50">{task}</button>)}</div>
-            <SmallButton primary onClick={runAgent}>Ask {helperName || agent.name}</SmallButton>
+            <div className="flex flex-wrap gap-3">{TEST_TASKS.map((task) => <button key={task} onClick={() => { setAgentInput(task); setAgentInput(task); setTestTask(task); setAgentReply(''); setActivated(false) }} className="rounded-2xl border border-slate-300 bg-white px-4 py-3 text-left text-sm font-bold hover:bg-slate-50">{task}</button>)}</div>
+            <SmallButton primary onClick={runAgent}><Send className="h-4 w-4" /> Activate and Test {helperName || agent.name}</SmallButton>
             {agentReply && <div className="rounded-3xl bg-slate-950 p-5 text-white"><p className="text-sm font-black uppercase tracking-wide text-slate-400">Agent answer</p><pre className="mt-3 whitespace-pre-wrap text-sm leading-7">{agentReply}</pre></div>}
+            {activated && <div className="rounded-3xl border border-emerald-200 bg-emerald-50 p-5 text-emerald-950"><p className="flex items-center gap-2 text-xl font-black"><CheckCircle2 className="h-6 w-6" /> Activated — your AI Agent works</p><p className="mt-2 text-sm leading-6">You asked a task and received a useful answer. This is the finish line.</p></div>}
           </div>
           <details className="mt-5 rounded-3xl border border-slate-200 bg-slate-50 p-5">
             <summary className="cursor-pointer font-black">Optional advanced setup</summary>
@@ -265,15 +259,6 @@ export default function App() {
           </details>
           <div className="mt-6 flex justify-between gap-3"><SmallButton onClick={() => setStep(4)}><ArrowLeft className="h-4 w-4" /> Back</SmallButton><SmallButton onClick={reset}><RotateCcw className="h-4 w-4" /> Start Over</SmallButton></div>
         </div>}
-      </section>
-
-      <section className="mt-5 rounded-[2rem] bg-white p-5 shadow-sm">
-        <details>
-          <summary className="cursor-pointer font-black">How this becomes a working helper</summary>
-          <div className="mt-4 grid gap-2 sm:grid-cols-3">
-            {HOW_TO.map((item, index) => <div key={item} className="rounded-2xl bg-slate-50 p-4"><p className="text-xs font-black text-slate-400">STEP {index + 1}</p><p className="mt-1 text-sm font-bold leading-6 text-slate-700">{item}</p></div>)}
-          </div>
-        </details>
       </section>
 
       <footer className="py-6 text-center text-xs font-bold text-slate-500">Simplicity rule: one screen, one decision, one next button.</footer>
