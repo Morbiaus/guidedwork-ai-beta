@@ -45,6 +45,14 @@ const PERSONALITIES = [
   { label: 'Direct and practical', tone: 'Direct, practical, organized, and action-oriented.' },
 ]
 
+const AI_BRAINS = [
+  { id: 'guidedwork', name: 'GuidedWork AI', badge: 'Recommended', plain: 'Easiest. No setup. Start chatting right away.', icon: '✨' },
+  { id: 'chatgpt', name: 'ChatGPT', badge: 'Popular', plain: 'Use a ChatGPT-style brain behind the scenes.', icon: '💬' },
+  { id: 'claude', name: 'Claude', badge: 'Writing', plain: 'Great for thoughtful writing and planning.', icon: '📝' },
+  { id: 'gemini', name: 'Gemini', badge: 'Google', plain: 'Good for everyday help and Google-style workflows.', icon: '🔎' },
+  { id: 'concierge', name: 'Set it up for me', badge: 'Hands-off', plain: 'GuidedWork handles the setup so you do not have to.', icon: '🛠️' },
+]
+
 const TEST_TASKS = [
   'Help me make a simple plan for tomorrow.',
   'Help me write a kind message saying I need to reschedule.',
@@ -109,6 +117,7 @@ export default function App() {
   const [testTask, setTestTask] = useState(TEST_TASKS[0])
   const [copied, setCopied] = useState(false)
   const [activated, setActivated] = useState(false)
+  const [aiBrain, setAiBrain] = useState('guidedwork')
   const [agentInput, setAgentInput] = useState(TEST_TASKS[0])
   const [agentReply, setAgentReply] = useState('')
   const [chatMessages, setChatMessages] = useState([])
@@ -127,27 +136,28 @@ export default function App() {
         setAgentInput(saved.agentInput || saved.testTask || TEST_TASKS[0])
         setAgentReply(saved.agentReply || '')
         setActivated(Boolean(saved.activated))
+        setAiBrain(saved.aiBrain || 'guidedwork')
         setChatMessages(saved.chatMessages || [])
       }
     } catch {}
   }, [])
 
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ step, agentType, personalityLabel, helperName, built, testTask, agentInput, agentReply, activated, chatMessages }))
-  }, [step, agentType, personalityLabel, helperName, built, testTask, agentInput, agentReply, activated, chatMessages])
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ step, agentType, personalityLabel, helperName, built, testTask, agentInput, agentReply, activated, aiBrain, chatMessages }))
+  }, [step, agentType, personalityLabel, helperName, built, testTask, agentInput, agentReply, activated, aiBrain, chatMessages])
 
   const agent = useMemo(() => AGENTS.find((a) => a.type === agentType) || AGENTS[0], [agentType])
   const personality = useMemo(() => PERSONALITIES.find((p) => p.label === personalityLabel) || PERSONALITIES[0], [personalityLabel])
   const workflows = useMemo(() => workflowsFor(agent.type), [agent.type])
   const prompt = useMemo(() => makePrompt(agent, helperName || agent.name, personality, workflows), [agent, helperName, personality, workflows])
+  const selectedBrain = useMemo(() => AI_BRAINS.find((brain) => brain.id === aiBrain) || AI_BRAINS[0], [aiBrain])
 
   const buildAgent = () => {
-    const name = helperName || agent.name
     setBuilt(true)
     setAgentInput(TEST_TASKS[0])
     setActivated(false)
     setAgentReply('')
-    setChatMessages([{ role: 'assistant', content: `Hi, I’m ${name}. I’m ready. Ask me for help, or tap one of the starter tasks below.` }])
+    setChatMessages([])
     setStep(5)
   }
 
@@ -163,8 +173,19 @@ export default function App() {
     setAgentInput(TEST_TASKS[0])
     setAgentReply('')
     setActivated(false)
+    setAiBrain('guidedwork')
     setChatMessages([])
     setChatPending(false)
+  }
+
+  const activateBrain = (brainId) => {
+    const brain = AI_BRAINS.find((item) => item.id === brainId) || AI_BRAINS[0]
+    const name = helperName || agent.name
+    setAiBrain(brain.id)
+    setActivated(false)
+    setAgentInput(TEST_TASKS[0])
+    setChatMessages([{ role: 'assistant', content: `Hi, I’m ${name}. I’m connected to ${brain.name}. Ask me for help, or tap one of the starter tasks below.` }])
+    setStep(6)
   }
 
   const runAgent = async () => {
@@ -187,7 +208,7 @@ export default function App() {
         body: JSON.stringify({
           instructions: prompt,
           messages: nextMessages,
-          agent: { type: agent.type, name: helperName || agent.name, personality: personality.label },
+          agent: { type: agent.type, name: helperName || agent.name, personality: personality.label, brain: selectedBrain.name },
         }),
       })
       clearTimeout(timeout)
@@ -215,6 +236,7 @@ export default function App() {
       helperName,
       agentType: agent.type,
       personality: personality.label,
+      aiBrain: selectedBrain.name,
       testTask,
       instructions: prompt,
       chatMessages,
@@ -227,7 +249,7 @@ export default function App() {
       <header className="mb-5 rounded-[2rem] bg-white p-6 shadow-sm sm:p-8">
         <div className="mb-4 inline-flex items-center gap-2 rounded-full bg-slate-100 px-4 py-2 text-sm font-black text-slate-700"><BrainCircuit className="h-4 w-4" /> GuidedWork AI</div>
         <h1 className="text-4xl font-black tracking-tight sm:text-5xl">Welcome to AI Agent Builder</h1>
-        <p className="mt-4 max-w-2xl text-lg leading-8 text-slate-600">Make a simple AI helper in five easy steps. No tech words. No setup confusion. Just pick, build, and try it.</p>
+        <p className="mt-4 max-w-2xl text-lg leading-8 text-slate-600">Make a simple AI helper in easy steps. No tech words. No setup confusion. Just pick, build, connect, and chat.</p>
       </header>
 
       <section key={step} className="rounded-[2rem] bg-white p-6 shadow-sm sm:p-8">
@@ -267,7 +289,7 @@ export default function App() {
         {step === 4 && <div>
           <p className="text-sm font-black uppercase tracking-wide text-slate-500">Step 4 of 5</p>
           <h2 className="mt-2 text-3xl font-black">Build your AI Agent</h2>
-          <p className="mt-3 text-slate-600">Everything technical happens behind the scenes. Click once and your helper will be ready to test.</p>
+          <p className="mt-3 text-slate-600">Everything technical happens behind the scenes. Click once, then choose the AI brain that powers your agent.</p>
           <div className="mt-6 rounded-3xl bg-slate-950 p-6 text-white">
             <div className="flex items-start gap-4"><div className="text-4xl">{agent.icon}</div><div><p className="text-3xl font-black">{helperName || agent.name}</p><p className="mt-1 text-slate-300">{agent.type} · {personality.label}</p></div></div>
             <ul className="mt-5 grid gap-3 text-sm text-slate-200">
@@ -280,11 +302,30 @@ export default function App() {
         </div>}
 
         {step === 5 && <div>
-          <p className="text-sm font-black uppercase tracking-wide text-emerald-600">Step 5 of 5</p>
+          <p className="text-sm font-black uppercase tracking-wide text-slate-500">Step 5</p>
+          <h2 className="mt-2 text-3xl font-black">Choose your AI brain</h2>
+          <p className="mt-3 text-slate-600">This powers your agent. We recommend GuidedWork AI because it needs no setup.</p>
+          <div className="mt-6 grid gap-3 sm:grid-cols-2">
+            {AI_BRAINS.map((brain) => <button key={brain.id} onClick={() => activateBrain(brain.id)} className={`rounded-3xl border p-5 text-left transition ${aiBrain === brain.id ? 'border-slate-950 bg-slate-950 text-white' : 'border-slate-200 bg-white hover:bg-slate-50'}`}>
+              <div className="flex items-start justify-between gap-3">
+                <div className="text-3xl">{brain.icon}</div>
+                <span className={`rounded-full px-3 py-1 text-xs font-black ${aiBrain === brain.id ? 'bg-white/15 text-white' : 'bg-slate-100 text-slate-600'}`}>{brain.badge}</span>
+              </div>
+              <h3 className="mt-3 text-xl font-black">{brain.name}</h3>
+              <p className={`mt-2 text-sm leading-6 ${aiBrain === brain.id ? 'text-slate-200' : 'text-slate-600'}`}>{brain.plain}</p>
+              <p className={`mt-4 text-sm font-black ${aiBrain === brain.id ? 'text-white' : 'text-slate-950'}`}>Use {brain.name}</p>
+            </button>)}
+          </div>
+          <div className="mt-6 rounded-3xl border border-emerald-200 bg-emerald-50 p-5 text-sm leading-6 text-emerald-950"><b>Grandma mode:</b> no API keys, no settings, no technical setup. The connection happens in the background.</div>
+          <div className="mt-6 flex justify-between gap-3"><SmallButton onClick={() => setStep(4)}><ArrowLeft className="h-4 w-4" /> Back</SmallButton><SmallButton primary onClick={() => activateBrain(aiBrain)}>Continue with {selectedBrain.name} <ArrowRight className="h-4 w-4" /></SmallButton></div>
+        </div>}
+
+        {step === 6 && <div>
+          <p className="text-sm font-black uppercase tracking-wide text-emerald-600">Final step</p>
           <h2 className="mt-2 text-3xl font-black">Chat with your AI Agent</h2>
-          <p className="mt-3 text-slate-600">Your agent is built. Send a message to activate it, then keep chatting.</p>
+          <p className="mt-3 text-slate-600">Your agent is connected to {selectedBrain.name}. Send a message, then keep chatting.</p>
           <div className="mt-6 grid gap-4">
-            <div className="rounded-3xl border border-emerald-200 bg-emerald-50 p-5 text-emerald-950"><p className="flex items-center gap-2 text-xl font-black"><CheckCircle2 className="h-6 w-6" /> {helperName || agent.name} has been built</p><p className="mt-2 text-sm leading-6">Type a message below. Once the agent answers, it is active and you can continue the conversation.</p></div>
+            <div className="rounded-3xl border border-emerald-200 bg-emerald-50 p-5 text-emerald-950"><p className="flex items-center gap-2 text-xl font-black"><CheckCircle2 className="h-6 w-6" /> {helperName || agent.name} has been built</p><p className="mt-2 text-sm leading-6">Connected to <b>{selectedBrain.name}</b>. Type a message below. Once the agent answers, it is active and you can continue the conversation.</p></div>
             <div className="max-h-[26rem] overflow-auto rounded-3xl border border-slate-200 bg-slate-50 p-4">
               <div className="grid gap-3">
                 {chatMessages.map((message, index) => <div key={`${message.role}-${index}`} className={`rounded-3xl px-5 py-4 text-sm leading-7 ${message.role === 'user' ? 'ml-8 bg-slate-950 text-white' : 'mr-8 bg-white text-slate-800 shadow-sm'}`}>
@@ -305,7 +346,7 @@ export default function App() {
             <div className="mt-4 flex flex-wrap gap-3"><SmallButton onClick={copyPrompt}><Copy className="h-4 w-4" /> Copy Instructions</SmallButton><SmallButton onClick={downloadBackup}><Download className="h-4 w-4" /> Download Backup</SmallButton><a className="inline-flex items-center justify-center gap-2 rounded-2xl border border-slate-300 bg-white px-5 py-4 text-sm font-black text-slate-950 hover:bg-slate-50" href={`mailto:you@example.com?subject=GuidedWork%20AI%20setup%20help&body=${encodeURIComponent(prompt)}`}>Set it up for me</a></div>
             {copied && <p className="mt-3 rounded-2xl bg-emerald-100 p-3 text-sm font-black text-emerald-800">Copied.</p>}
           </details>
-          <div className="mt-6 flex justify-between gap-3"><SmallButton onClick={() => setStep(4)}><ArrowLeft className="h-4 w-4" /> Back</SmallButton><SmallButton onClick={reset}><RotateCcw className="h-4 w-4" /> Start Over</SmallButton></div>
+          <div className="mt-6 flex justify-between gap-3"><SmallButton onClick={() => setStep(5)}><ArrowLeft className="h-4 w-4" /> Back</SmallButton><SmallButton onClick={reset}><RotateCcw className="h-4 w-4" /> Start Over</SmallButton></div>
         </div>}
       </section>
 
