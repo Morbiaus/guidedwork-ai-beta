@@ -93,19 +93,20 @@ function downloadJson(filename, data) {
   URL.revokeObjectURL(url)
 }
 
-function StepDots({ step }) {
-  return <div className="grid gap-2 sm:grid-cols-5" aria-label="Progress">
-    {['Pick helper', 'Personality', 'Name', 'Build', 'Test'].map((label, index) => {
-      const n = index + 1
-      const active = step === n
-      const done = step > n
-      return <div key={label} className={`rounded-2xl border p-3 text-center ${active ? 'border-slate-950 bg-slate-950 text-white' : done ? 'border-emerald-200 bg-emerald-50 text-emerald-900' : 'border-slate-200 bg-white text-slate-500'}`}>
-        <div className="mx-auto mb-1 flex h-7 w-7 items-center justify-center rounded-full bg-white/20 text-sm font-black">{done ? '✓' : n}</div>
-        <p className="text-xs font-black">{label}</p>
-      </div>
-    })}
-  </div>
+function makeAgentReply(agent, helperName, personality, task) {
+  const cleanTask = task?.trim() || 'Help me make a simple plan for tomorrow.'
+  if (agent.type === 'Message Helper') {
+    return `${helperName} says:\n\nHere is a simple message you can use:\n\n“Hi, I’m sorry, but I need to reschedule. Please let me know what other times work for you. Thank you.”\n\nBefore you send it, I can also make it warmer, shorter, or more formal.\n\nTask I handled: ${cleanTask}`
+  }
+  if (agent.type === 'Appointment Helper') {
+    return `${helperName} says:\n\nHere is an appointment prep list:\n\n1. Write down the appointment time and place.\n2. Bring your ID, insurance card, and any papers.\n3. Write your top 3 questions.\n4. Bring a list of medicines or important notes.\n5. After the visit, write down the next step.\n\nTask I handled: ${cleanTask}`
+  }
+  if (agent.type === 'Document Helper') {
+    return `${helperName} says:\n\nPaste the document here and I will return:\n\n1. A short plain-English summary.\n2. The most important dates, names, and amounts.\n3. Anything that needs your attention.\n4. Questions you may want to ask.\n\nTask I handled: ${cleanTask}`
+  }
+  return `${helperName} says:\n\nHere is a simple plan:\n\n1. Pick the most important thing you need to do.\n2. Write down anything you must not forget.\n3. Choose one small first step.\n4. Set aside a time to do it.\n5. Check it off when done.\n\nIf you want, tell me your top 2 or 3 things for tomorrow and I’ll organize them.\n\nTask I handled: ${cleanTask}\n\nStyle used: ${personality.label}.`
 }
+
 
 function SmallButton({ children, onClick, primary = false, disabled = false }) {
   return <button disabled={disabled} onClick={onClick} className={`inline-flex items-center justify-center gap-2 rounded-2xl px-5 py-4 text-sm font-black transition ${primary ? 'bg-slate-950 text-white hover:bg-slate-800' : 'border border-slate-300 bg-white text-slate-950 hover:bg-slate-50'} disabled:cursor-not-allowed disabled:opacity-50`}>{children}</button>
@@ -119,6 +120,8 @@ export default function App() {
   const [built, setBuilt] = useState(false)
   const [testTask, setTestTask] = useState(TEST_TASKS[0])
   const [copied, setCopied] = useState(false)
+  const [agentInput, setAgentInput] = useState(TEST_TASKS[0])
+  const [agentReply, setAgentReply] = useState('')
 
   useEffect(() => {
     try {
@@ -130,13 +133,15 @@ export default function App() {
         setHelperName(saved.helperName || AGENTS[0].name)
         setBuilt(Boolean(saved.built))
         setTestTask(saved.testTask || TEST_TASKS[0])
+        setAgentInput(saved.agentInput || saved.testTask || TEST_TASKS[0])
+        setAgentReply(saved.agentReply || '')
       }
     } catch {}
   }, [])
 
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ step, agentType, personalityLabel, helperName, built, testTask }))
-  }, [step, agentType, personalityLabel, helperName, built, testTask])
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ step, agentType, personalityLabel, helperName, built, testTask, agentInput, agentReply }))
+  }, [step, agentType, personalityLabel, helperName, built, testTask, agentInput, agentReply])
 
   const agent = useMemo(() => AGENTS.find((a) => a.type === agentType) || AGENTS[0], [agentType])
   const personality = useMemo(() => PERSONALITIES.find((p) => p.label === personalityLabel) || PERSONALITIES[0], [personalityLabel])
@@ -145,6 +150,8 @@ export default function App() {
 
   const buildAgent = () => {
     setBuilt(true)
+    setAgentInput(TEST_TASKS[0])
+    setAgentReply(makeAgentReply(agent, helperName || agent.name, personality, TEST_TASKS[0]))
     setStep(5)
   }
 
@@ -157,9 +164,14 @@ export default function App() {
     setBuilt(false)
     setTestTask(TEST_TASKS[0])
     setCopied(false)
+    setAgentInput(TEST_TASKS[0])
+    setAgentReply('')
   }
 
-  const answer = `${helperName || agent.name} says:\n\nHere is a simple plan:\n\n1. Pick the most important thing you need to do.\n2. Write down anything you must not forget.\n3. Choose one small first step.\n4. Save anything that needs a reminder.\n\nFor your test task, I would start by asking: what are the top 2 or 3 things you want help with?`
+  const runAgent = () => {
+    setTestTask(agentInput)
+    setAgentReply(makeAgentReply(agent, helperName || agent.name, personality, agentInput))
+  }
 
   const copyPrompt = async () => {
     await navigator.clipboard.writeText(prompt)
@@ -184,10 +196,6 @@ export default function App() {
         <h1 className="text-4xl font-black tracking-tight sm:text-5xl">Welcome to AI Agent Builder</h1>
         <p className="mt-4 max-w-2xl text-lg leading-8 text-slate-600">Make a simple AI helper in five easy steps. No tech words. No setup confusion. Just pick, build, and try it.</p>
       </header>
-
-      <section className="mb-5 rounded-[2rem] bg-white p-5 shadow-sm sm:p-6">
-        <StepDots step={step} />
-      </section>
 
       <section key={step} className="rounded-[2rem] bg-white p-6 shadow-sm sm:p-8">
         {step === 1 && <div>
@@ -240,16 +248,18 @@ export default function App() {
 
         {step === 5 && <div>
           <p className="text-sm font-black uppercase tracking-wide text-emerald-600">Step 5 of 5</p>
-          <h2 className="mt-2 text-3xl font-black">Confirm your helper works</h2>
-          <p className="mt-3 text-slate-600">Try one simple task and look for a useful answer.</p>
+          <h2 className="mt-2 text-3xl font-black">Your AI Agent is working</h2>
+          <p className="mt-3 text-slate-600">Ask it for help. It will answer right here.</p>
           <div className="mt-6 grid gap-4">
-            <label><span className="mb-2 block text-sm font-black text-slate-700">Test task</span><select value={testTask} onChange={(e) => setTestTask(e.target.value)} className="w-full rounded-3xl border border-slate-300 bg-white px-5 py-4 text-base font-bold outline-none focus:border-slate-950">{TEST_TASKS.map((task) => <option key={task}>{task}</option>)}</select></label>
-            <div className="rounded-3xl bg-slate-950 p-5 text-white"><p className="text-sm font-black uppercase tracking-wide text-slate-400">Useful return</p><pre className="mt-3 whitespace-pre-wrap text-sm leading-7">{answer}</pre></div>
-            <div className="rounded-3xl border border-emerald-200 bg-emerald-50 p-5 text-emerald-950"><p className="flex items-center gap-2 text-xl font-black"><CheckCircle2 className="h-6 w-6" /> My helper works</p><p className="mt-2 text-sm leading-6">You now have a working starter AI Agent. The optional buttons below are only for saving or using it somewhere else.</p></div>
+            <div className="rounded-3xl border border-emerald-200 bg-emerald-50 p-5 text-emerald-950"><p className="flex items-center gap-2 text-xl font-black"><CheckCircle2 className="h-6 w-6" /> {helperName || agent.name} is ready</p><p className="mt-2 text-sm leading-6">The setup is complete. The agent can now take a task and return a useful answer.</p></div>
+            <label><span className="mb-2 block text-sm font-black text-slate-700">Ask your AI Agent</span><textarea rows={4} value={agentInput} onChange={(e) => setAgentInput(e.target.value)} className="w-full rounded-3xl border border-slate-300 bg-white px-5 py-4 text-base font-bold leading-7 outline-none focus:border-slate-950" /></label>
+            <div className="flex flex-wrap gap-3">{TEST_TASKS.map((task) => <button key={task} onClick={() => { setAgentInput(task); setAgentReply(makeAgentReply(agent, helperName || agent.name, personality, task)); setTestTask(task) }} className="rounded-2xl border border-slate-300 bg-white px-4 py-3 text-left text-sm font-bold hover:bg-slate-50">{task}</button>)}</div>
+            <SmallButton primary onClick={runAgent}>Ask {helperName || agent.name}</SmallButton>
+            {agentReply && <div className="rounded-3xl bg-slate-950 p-5 text-white"><p className="text-sm font-black uppercase tracking-wide text-slate-400">Agent answer</p><pre className="mt-3 whitespace-pre-wrap text-sm leading-7">{agentReply}</pre></div>}
           </div>
           <details className="mt-5 rounded-3xl border border-slate-200 bg-slate-50 p-5">
-            <summary className="cursor-pointer font-black">Optional: use this helper somewhere else</summary>
-            <p className="mt-3 text-sm leading-6 text-slate-600">Copy these hidden instructions into ChatGPT, Claude, Gemini, or send them to GuidedWork AI for setup help.</p>
+            <summary className="cursor-pointer font-black">Optional advanced setup</summary>
+            <p className="mt-3 text-sm leading-6 text-slate-600">The agent already works here. These buttons are only for saving a backup or using the same agent somewhere else.</p>
             <div className="mt-4 flex flex-wrap gap-3"><SmallButton onClick={copyPrompt}><Copy className="h-4 w-4" /> Copy Instructions</SmallButton><SmallButton onClick={downloadBackup}><Download className="h-4 w-4" /> Download Backup</SmallButton><a className="inline-flex items-center justify-center gap-2 rounded-2xl border border-slate-300 bg-white px-5 py-4 text-sm font-black text-slate-950 hover:bg-slate-50" href={`mailto:you@example.com?subject=GuidedWork%20AI%20setup%20help&body=${encodeURIComponent(prompt)}`}>Set it up for me</a></div>
             {copied && <p className="mt-3 rounded-2xl bg-emerald-100 p-3 text-sm font-black text-emerald-800">Copied.</p>}
           </details>
