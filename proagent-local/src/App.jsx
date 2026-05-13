@@ -58,7 +58,7 @@ const AI_BRAINS = [
   { id: 'chatgpt', name: 'ChatGPT', badge: 'Popular', plain: 'Pick this if you want your agent powered by a ChatGPT-style brain.', icon: '💬' },
   { id: 'claude', name: 'Claude', badge: 'Writing', plain: 'Pick this for careful writing, planning, and explanations.', icon: '📝' },
   { id: 'gemini', name: 'Gemini', badge: 'Google', plain: 'Pick this for everyday help with a Google-style AI brain.', icon: '🔎' },
-  { id: 'concierge', name: 'Set it up for me', badge: 'Hands-off', plain: 'GuidedWork contacts you and handles the whole connection.', icon: '🛠️' },
+  { id: 'concierge', name: 'Set it up for me', badge: 'Hands-off', plain: 'GuidedWork handles the connection and takes you straight to a working agent.', icon: '🛠️' },
 ]
 
 const TEST_TASKS = [
@@ -188,6 +188,7 @@ export default function App() {
   const prompt = useMemo(() => makePrompt(agent, helperName || agent.name, personality, workflows), [agent, helperName, personality, workflows])
   const selectedBrain = useMemo(() => AI_BRAINS.find((brain) => brain.id === aiBrain) || AI_BRAINS[0], [aiBrain])
   const starterTasks = useMemo(() => TEST_TASKS_BY_AGENT[agent.type] || TEST_TASKS, [agent.type])
+  const connectionName = selectedBrain.id === 'concierge' ? 'GuidedWork Setup' : selectedBrain.name
 
   const buildAgent = () => {
     setBuilt(true)
@@ -218,10 +219,11 @@ export default function App() {
   const activateBrain = (brainId) => {
     const brain = AI_BRAINS.find((item) => item.id === brainId) || AI_BRAINS[0]
     const name = helperName || agent.name
+    const connectedName = brain.id === 'concierge' ? 'GuidedWork Setup' : brain.name
     setAiBrain(brain.id)
     setActivated(false)
     setAgentInput(starterTasks[0])
-    setChatMessages([{ role: 'assistant', content: `Hi, I’m ${name}. I’m connected to ${brain.name}. Ask me for help, or tap one of the starter tasks below.` }])
+    setChatMessages([{ role: 'assistant', content: `Hi, I’m ${name}. I’m connected through ${connectedName}. I am ready to help. Press the test button below and I will answer.` }])
     setStep(6)
   }
 
@@ -245,7 +247,7 @@ export default function App() {
         body: JSON.stringify({
           instructions: prompt,
           messages: nextMessages,
-          agent: { type: agent.type, name: helperName || agent.name, personality: personality.label, brain: selectedBrain.name },
+          agent: { type: agent.type, name: helperName || agent.name, personality: personality.label, brain: connectionName },
         }),
       })
       clearTimeout(timeout)
@@ -273,7 +275,7 @@ export default function App() {
       helperName,
       agentType: agent.type,
       personality: personality.label,
-      aiBrain: selectedBrain.name,
+      aiBrain: connectionName,
       testTask,
       instructions: prompt,
       chatMessages,
@@ -343,32 +345,33 @@ export default function App() {
           <h2 className="mt-2 text-3xl font-black">Your agent is built</h2>
           <div className="mt-5 rounded-3xl border border-emerald-200 bg-emerald-50 p-5 text-emerald-950">
             <p className="flex items-center gap-2 text-2xl font-black"><CheckCircle2 className="h-7 w-7" /> {helperName || agent.name} is ready</p>
-            <p className="mt-2 text-base leading-7">Now choose the AI brain that will answer for your agent. You do not need to know passwords, keys, or technical settings here.</p>
+            <p className="mt-2 text-base leading-7">Now choose the AI brain that will answer for your agent. Tap one choice below. The app will connect it and move you to the test screen.</p>
           </div>
-          <h3 className="mt-7 text-xl font-black">Step 5A: Pick one AI brain</h3>
-          <p className="mt-2 text-slate-600">Tap one box. If you are not sure, choose GuidedWork AI.</p>
+          <h3 className="mt-7 text-xl font-black">Step 5A: Tap one AI brain to connect it</h3>
+          <p className="mt-2 text-slate-600">Tap one box. If you are not sure, tap GuidedWork AI. There is no separate setup step.</p>
           <div className="mt-5 grid gap-3 sm:grid-cols-2">
-            {AI_BRAINS.map((brain) => <button key={brain.id} onClick={() => setAiBrain(brain.id)} className={`rounded-3xl border p-5 text-left transition ${aiBrain === brain.id ? 'border-slate-950 bg-slate-950 text-white' : 'border-slate-200 bg-white hover:bg-slate-50'}`}>
+            {AI_BRAINS.map((brain) => <button key={brain.id} onClick={() => activateBrain(brain.id)} className={`rounded-3xl border p-5 text-left transition ${aiBrain === brain.id ? 'border-slate-950 bg-slate-950 text-white' : 'border-slate-200 bg-white hover:bg-slate-50'}`}>
               <div className="flex items-start justify-between gap-3">
                 <div className="text-3xl">{brain.icon}</div>
-                <span className={`rounded-full px-3 py-1 text-xs font-black ${aiBrain === brain.id ? 'bg-white/15 text-white' : 'bg-slate-100 text-slate-600'}`}>{aiBrain === brain.id ? 'Selected' : brain.badge}</span>
+                <span className={`rounded-full px-3 py-1 text-xs font-black ${aiBrain === brain.id ? 'bg-white/15 text-white' : 'bg-slate-100 text-slate-600'}`}>{brain.badge}</span>
               </div>
               <h3 className="mt-3 text-xl font-black">{brain.name}</h3>
               <p className={`mt-2 text-sm leading-6 ${aiBrain === brain.id ? 'text-slate-200' : 'text-slate-600'}`}>{brain.plain}</p>
+              <p className={`mt-4 inline-flex rounded-2xl px-4 py-3 text-sm font-black ${aiBrain === brain.id ? 'bg-white text-slate-950' : 'bg-slate-950 text-white'}`}>{brain.id === 'concierge' ? 'Set up and continue' : `Connect ${brain.name}`}</p>
             </button>)}
           </div>
           <div className="mt-6 rounded-3xl border border-blue-200 bg-blue-50 p-5 text-sm leading-6 text-blue-950">
             <p className="flex items-center gap-2 text-lg font-black"><Link2 className="h-5 w-5" /> Step 5B: GuidedWork connects it</p>
-            <p className="mt-2">When you press the button below, GuidedWork connects <b>{helperName || agent.name}</b> to <b>{selectedBrain.name}</b>. If a sign-in is needed, GuidedWork will show one simple sign-in screen. If setup is not available, GuidedWork will handle it for you.</p>
+            <p className="mt-2">A tap above connects <b>{helperName || agent.name}</b> and moves to the final test. If a real sign-in is needed in the full product, GuidedWork will handle it in one guided screen — never with API keys.</p>
           </div>
-          <div className="mt-6 flex justify-between gap-3"><SmallButton onClick={() => setStep(4)}><ArrowLeft className="h-4 w-4" /> Back</SmallButton><SmallButton primary onClick={() => activateBrain(aiBrain)}><Link2 className="h-4 w-4" /> Connect {selectedBrain.name}</SmallButton></div>
+          <div className="mt-6 flex justify-between gap-3"><SmallButton onClick={() => setStep(4)}><ArrowLeft className="h-4 w-4" /> Back</SmallButton><SmallButton primary onClick={() => activateBrain(aiBrain)}><Link2 className="h-4 w-4" /> Continue with {selectedBrain.name}</SmallButton></div>
         </div>}
 
         {step === 6 && <div>
           <p className="text-sm font-black uppercase tracking-wide text-emerald-600">Step 6 of 6</p>
           <h2 className="mt-2 text-3xl font-black">Test your new agent</h2>
           <p className="mt-3 text-slate-600">Follow these steps in order. Do not guess — just go one line at a time.</p>
-          <div className="mt-5 rounded-3xl border border-emerald-200 bg-emerald-50 p-5 text-emerald-950"><p className="flex items-center gap-2 text-xl font-black"><CheckCircle2 className="h-6 w-6" /> {helperName || agent.name} is built and connected to {selectedBrain.name}</p><p className="mt-2 text-sm leading-6">Now we will prove it works.</p></div>
+          <div className="mt-5 rounded-3xl border border-emerald-200 bg-emerald-50 p-5 text-emerald-950"><p className="flex items-center gap-2 text-xl font-black"><CheckCircle2 className="h-6 w-6" /> {helperName || agent.name} is built and connected through {connectionName}</p><p className="mt-2 text-sm leading-6">Now we will prove it works.</p></div>
           <div className="mt-6 grid gap-4 lg:grid-cols-[0.9fr_1.1fr]">
             <div className="rounded-3xl border border-slate-200 bg-slate-50 p-5">
               <h3 className="text-xl font-black">What to do</h3>
